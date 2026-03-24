@@ -634,7 +634,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
   const scrollToNextOrAdvance = (index: number) => {
     if (index + 1 < currentPageAllQuestions.length) {
       // Wait for layout to settle (sub-questions may have expanded/collapsed)
-      setTimeout(() => scrollToQuestion(index + 1), 100)
+      setTimeout(() => scrollToQuestion(index + 1), 300)
       return
     }
     // No more questions — advance to next page or submit on last page
@@ -795,9 +795,11 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                 setAnswer={val => handleFinishAnswer(fq.id, val, fi)}
                 onLayout={e => { finishOffsets.current[fi] = e.nativeEvent.layout.y }}
                 onNext={() => {
-                  if (fi + 1 < finishMode.length && finishOffsets.current[fi + 1] !== undefined) {
-                    finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[fi + 1] - 12), animated: true })
-                  }
+                  setTimeout(() => {
+                    if (fi + 1 < finishMode.length && finishOffsets.current[fi + 1] !== undefined) {
+                      finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[fi + 1] - 12), animated: true })
+                    }
+                  }, 100)
                 }}
                 subAnswers={answers}
                 setSubAnswer={(subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
@@ -853,7 +855,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                 answer={answers[q.id]}
                 setAnswer={readOnly ? () => {} : val => handleSetAnswer(q.id, val, i)}
                 collapsed={!active}
-                onNext={readOnly ? undefined : () => scrollToNextOrAdvance(i)}
+                onNext={readOnly ? undefined : () => setTimeout(() => scrollToNextOrAdvance(i), 100)}
                 onLayout={e => { cardOffsets.current[i] = e.nativeEvent.layout.y }}
                 subAnswers={answers}
                 setSubAnswer={readOnly ? undefined : (subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
