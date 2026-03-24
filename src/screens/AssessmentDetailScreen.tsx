@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Platform } from 'react-native'
 import {
   View,
   Text,
@@ -588,8 +589,31 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
 
   const finishScrollRef = useRef<ScrollView>(null)
   const finishOffsets = useRef<number[]>([])
+  const finishCardRefs = useRef<(View | null)[]>([])
+
+  const getFinishDomOffset = (ref: View | null): number | null => {
+    if (!ref || Platform.OS !== 'web') return null
+    try {
+      const el = ref as any
+      if (typeof el.offsetTop === 'number' && el.offsetParent) {
+        let top = 0
+        let node = el
+        while (node && node !== (finishScrollRef.current as any)) {
+          top += node.offsetTop || 0
+          node = node.offsetParent
+        }
+        return top
+      }
+    } catch {}
+    return null
+  }
 
   const scrollToFinishQuestion = (qIndex: number) => {
+    const freshOffset = getFinishDomOffset(finishCardRefs.current[qIndex])
+    if (freshOffset !== null) {
+      finishScrollRef.current?.scrollTo({ y: Math.max(0, freshOffset), animated: true })
+      return
+    }
     if (finishOffsets.current[qIndex] !== undefined) {
       finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[qIndex]), animated: true })
     }
@@ -600,7 +624,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     if (!finishMode) return
     const q = finishMode[index]
     if (q && (q.type === 'single_choice' || q.type === 'yes_no') && !q.subQuestions) {
-      setTimeout(() => scrollToFinishQuestion(index + 1), 500)
+      setTimeout(() => scrollToFinishQuestion(index + 1), 350)
     }
   }
 
@@ -631,7 +655,33 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     return true
   }
 
+  const getDomOffset = (ref: View | null): number | null => {
+    if (!ref || Platform.OS !== 'web') return null
+    try {
+      const el = ref as any
+      // react-native-web View refs are DOM elements
+      if (typeof el.offsetTop === 'number' && el.offsetParent) {
+        let top = 0
+        let node = el
+        // Walk up to the scroll container to get total offset
+        while (node && node !== (scrollRef.current as any)) {
+          top += node.offsetTop || 0
+          node = node.offsetParent
+        }
+        return top
+      }
+    } catch {}
+    return null
+  }
+
   const scrollToQuestion = (qIndex: number) => {
+    // Try fresh DOM measurement on web
+    const freshOffset = getDomOffset(cardRefs.current[qIndex])
+    if (freshOffset !== null) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, freshOffset), animated: true })
+      return
+    }
+    // Fallback to cached offset
     if (cardOffsets.current[qIndex] !== undefined) {
       scrollRef.current?.scrollTo({ y: Math.max(0, cardOffsets.current[qIndex]), animated: true })
     }
@@ -639,8 +689,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
 
   const scrollToNextOrAdvance = (index: number) => {
     if (index + 1 < currentPageAllQuestions.length) {
-      // Wait for layout to settle (sub-questions may have expanded/collapsed)
-      setTimeout(() => scrollToQuestion(index + 1), 400)
+      setTimeout(() => scrollToQuestion(index + 1), 50)
       return
     }
     // No more questions — advance to next page or submit on last page
@@ -658,7 +707,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     const q = currentPageAllQuestions[index]
     if (q && (q.type === 'single_choice' || q.type === 'yes_no') && !q.subQuestions) {
       // Delay to let layout recalculate after skip-logic changes
-      setTimeout(() => scrollToNextOrAdvance(index), 500)
+      setTimeout(() => scrollToNextOrAdvance(index), 350)
     }
   }
 
@@ -793,13 +842,13 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
             const allQs = pages.flatMap(p => p.questions)
             const globalIdx = allQs.findIndex(q => q.id === fq.id)
             return (
-              <View key={fq.id} onLayout={e => { finishOffsets.current[fi] = e.nativeEvent.layout.y }}>
+              <View key={fq.id} ref={ref => { finishCardRefs.current[fi] = ref }} onLayout={e => { finishOffsets.current[fi] = e.nativeEvent.layout.y }}>
                 <QuestionCard
                   question={fq}
                   index={globalIdx >= 0 ? globalIdx : 0}
                   answer={answers[fq.id]}
                   setAnswer={val => handleFinishAnswer(fq.id, val, fi)}
-                  onNext={() => setTimeout(() => scrollToFinishQuestion(fi + 1), 100)}
+                  onNext={() => setTimeout(() => scrollToFinishQuestion(fi + 1), 50)}
                   subAnswers={answers}
                   setSubAnswer={(subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
                   isLastQuestion={fi === finishMode.length - 1}
@@ -855,7 +904,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                   answer={answers[q.id]}
                   setAnswer={readOnly ? () => {} : val => handleSetAnswer(q.id, val, i)}
                   collapsed={!active}
-                  onNext={readOnly ? undefined : () => setTimeout(() => scrollToNextOrAdvance(i), 100)}
+                  onNext={readOnly ? undefined : () => scrollToNextOrAdvance(i)}
                   subAnswers={answers}
                   setSubAnswer={readOnly ? undefined : (subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
                   isLastQuestion={currentPage === pages.length - 1 && i === currentPageAllQuestions.length - 1}
