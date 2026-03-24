@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -117,12 +117,14 @@ function QuestionCard({
   answer,
   setAnswer,
   onNext,
+  onLayout,
 }: {
   question: Question
   index: number
   answer: string | string[] | undefined
   setAnswer: (val: string | string[]) => void
   onNext?: () => void
+  onLayout?: (e: any) => void
 }) {
   const needsNextBtn = question.type === 'multi_choice' || question.type === 'text' || question.type === 'date'
   const hasAnswer = (() => {
@@ -133,7 +135,7 @@ function QuestionCard({
   const nextEnabled = !question.required || hasAnswer
 
   return (
-    <View style={qcard.wrap}>
+    <View style={qcard.wrap} onLayout={onLayout}>
       {/* Question text with number + required asterisk */}
       <Text style={qcard.questionText}>
         {index + 1}.{'  '}{question.text}
@@ -294,6 +296,8 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
   const [menuVisible, setMenuVisible] = useState(false)
   const [sideMenuVisible, setSideMenuVisible] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
+  const scrollRef = useRef<ScrollView>(null)
+  const cardOffsets = useRef<number[]>([])
 
   if (!assessment) return null
 
@@ -345,6 +349,10 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     })
 
   const currentPageQuestions = getVisibleQuestions(pages[currentPage]?.questions ?? [])
+  // Reset offsets when page changes
+  if (cardOffsets.current.length !== currentPageQuestions.length) {
+    cardOffsets.current = []
+  }
 
   // All visible questions across all pages
   const allVisibleQuestions = pages.flatMap(p => getVisibleQuestions(p.questions))
@@ -399,8 +407,17 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     }
   }
 
-  const handleSetAnswer = (questionId: string, val: string | string[]) => {
+  const handleSetAnswer = (questionId: string, val: string | string[], index: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: val }))
+    const q = currentPageQuestions[index]
+    if (q && (q.type === 'single_choice' || q.type === 'yes_no')) {
+      const nextOffset = cardOffsets.current[index + 1]
+      if (nextOffset !== undefined) {
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: nextOffset - 16, animated: true })
+        }, 200)
+      }
+    }
   }
 
   return (
@@ -500,6 +517,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
 
       {/* Current page — all questions on this page */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -515,8 +533,14 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
             question={q}
             index={i}
             answer={answers[q.id]}
-            setAnswer={val => handleSetAnswer(q.id, val)}
-            onNext={() => {}}
+            setAnswer={val => handleSetAnswer(q.id, val, i)}
+            onNext={() => {
+              const nextOffset = cardOffsets.current[i + 1]
+              if (nextOffset !== undefined) {
+                scrollRef.current?.scrollTo({ y: nextOffset - 16, animated: true })
+              }
+            }}
+            onLayout={e => { cardOffsets.current[i] = e.nativeEvent.layout.y }}
           />
         ))}
 
