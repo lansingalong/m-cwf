@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
   useWindowDimensions,
+  Image,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '../types'
@@ -96,7 +97,10 @@ function OutlinedField({
         />
         {showToggle && (
           <TouchableOpacity onPress={onToggleSecure} style={field.toggle}>
-            <Text style={field.toggleIcon}>{secureTextEntry ? '👁' : '🙈'}</Text>
+            <Image
+              source={require('../../assets/icon-eye-off.png')}
+              style={[field.eyeIcon, !secureTextEntry && field.eyeIconActive]}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -129,7 +133,8 @@ const field = StyleSheet.create({
     outlineStyle: 'none' as any,
   },
   toggle: { padding: 4 },
-  toggleIcon: { fontSize: 18 },
+  eyeIcon: { width: 22, height: 22, opacity: 0.5 },
+  eyeIconActive: { opacity: 1 },
 })
 
 
