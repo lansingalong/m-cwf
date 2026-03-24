@@ -326,9 +326,11 @@ function QuestionCard({
         </View>
       )}
 
-      {/* Next button — always shown when onNext is provided */}
+      {/* Next button — only for multi-select, text, date, or questions with sub-questions */}
       {!disabled && onNext && (() => {
         const hasSubQuestions = question.subQuestions && typeof answer === 'string' && question.subQuestions.triggerValues.includes(answer)
+        const showBtn = hasSubQuestions || needsNextBtn
+        if (!showBtn) return null
         const allSubsAnswered = hasSubQuestions
           ? question.subQuestions!.questions.every(sq => {
               if (!sq.required) return true
