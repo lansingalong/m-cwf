@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '../types'
@@ -28,7 +29,7 @@ import AddCircleSvg from '../../assets/icon-add-circle.svg'
 import InfoSvg from '../../assets/info.svg'
 import CheckInSvg from '../../assets/icon-checkin.svg'
 import ChevronSvg from '../../assets/icon-chevron.svg'
-import DiabetesIllustration from '../../assets/illustrations/iOS/diabetesmanagement.svg'
+const DiabetesPng = require('../../assets/illustrations/iOS/diabetesmanagement.png')
 import CardiacRehabIllustration from '../../assets/illustrations/iOS/cardiacrehab.svg'
 import WellbeingIllustration from '../../assets/illustrations/iOS/wellbeing.svg'
 
@@ -77,9 +78,10 @@ const av = StyleSheet.create({
 type CareProgramCardProps = {
   title: string
   accent: string
-  Illustration: React.FC<{ width: number; height: number }>
+  Illustration?: React.FC<{ width: number; height: number }>
+  imageSource?: any
 }
-function CareProgramCard({ title, accent, Illustration }: CareProgramCardProps) {
+function CareProgramCard({ title, accent, Illustration, imageSource }: CareProgramCardProps) {
   return (
     <View style={cp.card}>
       <View style={cp.top}>
@@ -88,7 +90,11 @@ function CareProgramCard({ title, accent, Illustration }: CareProgramCardProps) 
       </View>
       <View style={[cp.bottom, { backgroundColor: accent }]}>
         <View style={cp.illustrationWrap}>
-          <Illustration width={65} height={57} />
+          {Illustration ? (
+            <Illustration width={65} height={57} />
+          ) : imageSource ? (
+            <Image source={imageSource} style={{ width: 65, height: 57 }} resizeMode="contain" />
+          ) : null}
         </View>
       </View>
     </View>
@@ -265,14 +271,14 @@ export function ProfileScreen({ navigation }: Props) {
           style={styles.cpScroll}
           contentContainerStyle={styles.cpContent}
         >
-          <CareProgramCard title="Diabetes Management"   accent="#D8EDF5" Illustration={DiabetesIllustration} />
+          <CareProgramCard title="Diabetes Management"   accent="#D8EDF5" imageSource={DiabetesPng} />
           <CareProgramCard title="Cardiac Rehab Support" accent="#FDE3EB" Illustration={CardiacRehabIllustration} />
           <CareProgramCard title="Your Health Across Your Life: How to Feel Better Longer" accent="#EEE8F4" Illustration={WellbeingIllustration} />
         </ScrollView>
 
         {/* Check-Ins */}
         <SectionHeader label="Check-Ins" />
-        {mockAssessments.filter(a => a.id === 'hra' || a.id === 'sdoh').map(a => {
+        {mockAssessments.filter(a => a.id === 'hra' || a.id === 'fall').map(a => {
           const subtitle = a.status === 'completed'
             ? `Completed ${a.completedDate ? new Date(a.completedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`
             : `Due ${a.dueDate ? new Date(a.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`

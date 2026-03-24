@@ -155,6 +155,7 @@ function QuestionCard({
   subAnswers,
   setSubAnswer,
   isLastQuestion,
+  readOnly,
 }: {
   question: Question
   index: number
@@ -166,6 +167,7 @@ function QuestionCard({
   subAnswers?: Record<string, string | string[]>
   setSubAnswer?: (subId: string, val: string | string[]) => void
   isLastQuestion?: boolean
+  readOnly?: boolean
 }) {
   const needsNextBtn = question.type === 'multi_choice' || question.type === 'text' || question.type === 'date'
   const hasAnswer = (() => {
@@ -195,6 +197,7 @@ function QuestionCard({
         {question.required && <Text style={qcard.asterisk}> *</Text>}
       </Text>
 
+      <View style={readOnly ? { opacity: 0.6 } : undefined} pointerEvents={readOnly ? 'none' : 'auto'}>
       {/* Single / yes_no */}
       {(question.type === 'single_choice' || question.type === 'yes_no') && (
         <View style={qcard.optionList}>
@@ -346,6 +349,7 @@ function QuestionCard({
           </TouchableOpacity>
         )
       })()}
+      </View>
     </View>
   )
 }
@@ -853,6 +857,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                   subAnswers={answers}
                   setSubAnswer={readOnly ? undefined : (subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
                   isLastQuestion={currentPage === pages.length - 1 && i === currentPageAllQuestions.length - 1}
+                  readOnly={readOnly}
                 />
               </View>
             )

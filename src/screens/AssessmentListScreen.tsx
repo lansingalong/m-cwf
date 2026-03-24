@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   sectionRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   sectionTitle: { fontSize: 20, fontWeight: Typography.regular, color: Colors.neutral1, letterSpacing: 0.2 },
 
-  addBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.white, borderRadius: Radii.button, paddingHorizontal: 16, paddingVertical: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.18, shadowRadius: 4, elevation: 3 },
+  addBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.white, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.18, shadowRadius: 4, elevation: 3 },
   addBtnText: { fontSize: 15, color: Colors.brandSecondary, fontWeight: Typography.medium, letterSpacing: -0.24 },
 
   tabBar:   { flexDirection: 'row', backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.bgSecondary, paddingBottom: 28, paddingTop: 8 },
