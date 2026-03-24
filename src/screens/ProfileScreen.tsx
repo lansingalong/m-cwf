@@ -9,6 +9,8 @@ import {
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '../types'
+import { mockAssessments } from '../mocks/assessments'
+import { useAssessmentProgress } from '../context/AssessmentProgress'
 import { Colors, Typography, Radii, Shadows } from '../theme'
 import ChecklistIcon  from '../../assets/tab-checklist.svg'
 import ProgressIcon   from '../../assets/tab-progress.svg'
@@ -23,8 +25,12 @@ import BatterySvg     from '../../assets/icon-battery.svg'
 import WifiSvg        from '../../assets/icon-wifi.svg'
 import SignalSvg      from '../../assets/icon-signal.svg'
 import AddCircleSvg from '../../assets/icon-add-circle.svg'
+import InfoSvg from '../../assets/info.svg'
+import CheckInSvg from '../../assets/icon-checkin.svg'
+import ChevronSvg from '../../assets/icon-chevron.svg'
 import DiabetesIllustration from '../../assets/illustrations/iOS/diabetesmanagement.svg'
 import CardiacRehabIllustration from '../../assets/illustrations/iOS/cardiacrehab.svg'
+import WellbeingIllustration from '../../assets/illustrations/iOS/wellbeing.svg'
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Profile'>
@@ -127,13 +133,12 @@ function ListRow({ showIcon, name, schedule, note, noteIsNew, last }: ListRowPro
   return (
     <View style={[lr.row, !last && lr.divider]}>
       {showIcon && <MedicationSvg width={20} height={20} color={Colors.brandSecondary} />}
-      {!showIcon && <View style={lr.iconSpacer} />}
       <View style={lr.body}>
         <Text style={lr.name}>{name}</Text>
         <Text style={lr.schedule}>{schedule}</Text>
         {note && <Text style={[lr.note, noteIsNew && lr.noteNew]}>{note}</Text>}
       </View>
-      <ReminderAlarmSvg width={22} height={20} color={Colors.neutral5} />
+      <ReminderAlarmSvg width={22} height={20} color={Colors.brandSecondary} />
     </View>
   )
 }
@@ -142,7 +147,7 @@ const lr = StyleSheet.create({
   divider:   { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.bgSecondary },
   iconSpacer:{ width: 20 },
   body:      { flex: 1, gap: 2 },
-  name:      { fontSize: 15, fontWeight: Typography.medium, color: Colors.neutral2, letterSpacing: -0.24 },
+  name:      { fontSize: 16, fontWeight: '500', color: Colors.neutral2, letterSpacing: -0.32 },
   schedule:  { fontSize: 13, color: Colors.neutral3, letterSpacing: -0.078 },
   note:      { fontSize: 12, color: Colors.neutral3, fontStyle: 'italic', marginTop: 1 },
   noteNew:   { color: Colors.brandSecondary, fontStyle: 'normal' },
@@ -166,7 +171,7 @@ function SectionHeader({ label, info }: { label: string; info?: boolean }) {
   return (
     <View style={sh.row}>
       <Text style={sh.label}>{label}</Text>
-      {info && <Text style={sh.info}>ⓘ</Text>}
+      {info && <InfoSvg width={17} height={17} />}
     </View>
   )
 }
@@ -177,9 +182,57 @@ const sh = StyleSheet.create({
 })
 
 /* ─────────────────────────────────────────────────────────────────────────
+   CHECK-IN CARD — medication-card style with progress bar
+───────────────────────────────────────────────────────────────────────── */
+type CheckInCardProps = {
+  title: string
+  status: 'due' | 'in_progress' | 'completed'
+  subtitle: string
+  progress: number // 0–1
+  onPress?: () => void
+}
+function CheckInCard({ title, status, subtitle, progress, onPress }: CheckInCardProps) {
+  const completed = status === 'completed'
+  const pct = Math.round(progress * 100)
+  return (
+    <TouchableOpacity
+      style={ci.card}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={ci.row}>
+        <CheckInSvg width={20} height={20} color={Colors.brandSecondary} />
+        <View style={ci.body}>
+          <Text style={ci.name}>{title}</Text>
+          <Text style={ci.schedule}>{subtitle}</Text>
+          <View style={ci.progressRow}>
+            <View style={ci.progressTrack}>
+              <View style={[ci.progressFill, { width: `${pct}%` }]} />
+            </View>
+            <Text style={ci.progressLabel}>{pct}%</Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  )
+}
+const ci = StyleSheet.create({
+  card:            { backgroundColor: Colors.white, borderRadius: Radii.card, marginBottom: 10, ...Shadows.card },
+  row:             { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, gap: 12 },
+  body:            { flex: 1, gap: 4 },
+  name:            { fontSize: 16, fontWeight: '500', color: Colors.neutral2, letterSpacing: -0.32 },
+  schedule:        { fontSize: 13, color: Colors.neutral3, letterSpacing: -0.078 },
+  progressRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  progressTrack:   { flex: 1, height: 6, backgroundColor: Colors.bgSecondary, borderRadius: 3, overflow: 'hidden' },
+  progressFill:    { height: '100%', backgroundColor: Colors.brandPrimary, borderRadius: 3 },
+  progressLabel:   { fontSize: 11, color: Colors.neutral4, fontWeight: '500', minWidth: 28 },
+})
+
+/* ─────────────────────────────────────────────────────────────────────────
    MAIN SCREEN
 ───────────────────────────────────────────────────────────────────────── */
 export function ProfileScreen({ navigation }: Props) {
+  const { progress } = useAssessmentProgress()
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
@@ -214,7 +267,27 @@ export function ProfileScreen({ navigation }: Props) {
         >
           <CareProgramCard title="Diabetes Management"   accent="#D8EDF5" Illustration={DiabetesIllustration} />
           <CareProgramCard title="Cardiac Rehab Support" accent="#FDE3EB" Illustration={CardiacRehabIllustration} />
+          <CareProgramCard title="Your Health Across Your Life: How to Feel Better Longer" accent="#EEE8F4" Illustration={WellbeingIllustration} />
         </ScrollView>
+
+        {/* Check-Ins */}
+        <SectionHeader label="Check-Ins" />
+        {mockAssessments.filter(a => a.id === 'hra' || a.id === 'sdoh').map(a => {
+          const subtitle = a.status === 'completed'
+            ? `Completed ${a.completedDate ? new Date(a.completedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`
+            : `Due ${a.dueDate ? new Date(a.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`
+          const pct = a.status === 'completed' ? 1 : (progress[a.id] ?? 0)
+          return (
+            <CheckInCard
+              key={a.id}
+              title={a.title}
+              status={a.status}
+              subtitle={subtitle}
+              progress={pct}
+              onPress={() => navigation.navigate('AssessmentDetail', { assessmentId: a.id, readOnly: a.status === 'completed' })}
+            />
+          )
+        })}
 
         {/* Medication List */}
         <SectionHeader label="Medication List" />
@@ -222,11 +295,6 @@ export function ProfileScreen({ navigation }: Props) {
         <ListCard><ListRow showIcon name="Gabapentin"     schedule="Take daily, at 9:00AM"                   note="New Medication- Starting tomorrow" noteIsNew last /></ListCard>
         <ListCard><ListRow showIcon name="Metformin"      schedule="Take daily, at 9:00AM" last /></ListCard>
         <ListCard><ListRow showIcon name="Claritin"       schedule="Take daily, at 9:00AM" last /></ListCard>
-        <ListCard><ListRow showIcon name="Levothyroxine"  schedule="Take daily, at 9:00AM" last /></ListCard>
-        <ListCard><ListRow showIcon name="Methotrexate"   schedule="Take weekly on Mondays, at 9:00AM" last /></ListCard>
-        <TouchableOpacity style={styles.loadMore} activeOpacity={0.75}>
-          <Text style={styles.loadMoreText}>Load more</Text>
-        </TouchableOpacity>
 
         {/* Health Reminders */}
         <SectionHeader label="Health Reminders" />

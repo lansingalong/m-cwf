@@ -28,6 +28,7 @@ import WifiSvg        from '../../assets/icon-wifi.svg'
 import SignalSvg      from '../../assets/icon-signal.svg'
 import AddCircleSvg   from '../../assets/icon-add-circle.svg'
 import ChevronSvg     from '../../assets/icon-chevron.svg'
+import CompleteSvg    from '../../assets/icon-complete.svg'
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'AssessmentList'>
@@ -125,7 +126,7 @@ function TaskCard({ IconComponent, typeLabel, title, tag, completed, onPress }: 
       <View style={tk.main}>
         <Text style={[tk.title, completed && tk.titleMuted]} numberOfLines={2}>{title}</Text>
         {completed
-          ? <Text style={tk.checkmark}>✓</Text>
+          ? <CompleteSvg width={22} height={22} />
           : <ChevronSvg width={15} height={24} color={Colors.neutral2} />
         }
       </View>
@@ -143,7 +144,6 @@ const tk = StyleSheet.create({
   main:          { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title:         { flex: 1, fontSize: 16, lineHeight: 21, color: Colors.neutral2, letterSpacing: -0.32 },
   titleMuted:    { color: Colors.neutral3 },
-  checkmark:     { fontSize: 20, color: Colors.successText, fontWeight: Typography.bold },
 })
 
 /* ─────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -13,12 +13,15 @@ import {
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
-import { RootStackParamList, Question } from '../types'
-import { mockAssessments } from '../mocks/assessments'
+import { RootStackParamList, Question, SubQuestion } from '../types'
+import { mockAssessments, mockCompletedAnswers } from '../mocks/assessments'
 import { Colors, Typography, Radii, Shadows } from '../theme'
+import { useAssessmentProgress } from '../context/AssessmentProgress'
 import SubmitButtonSvg from '../../assets/icon-submit-button.svg'
 import HamburgerSvg from '../../assets/icon-hamburger.svg'
 import PageSvg from '../../assets/icon-page.svg'
+import BackChevronSvg from '../../assets/icon-back-chevron.svg'
+import HelpSvg from '../../assets/icon-help.svg'
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'AssessmentDetail'>
@@ -28,7 +31,7 @@ type Props = {
 type Answers = Record<string, string | string[]>
 
 /* ── Radio / checkbox option — matches original assessments project ───── */
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Path, Circle as SvgCircle } from 'react-native-svg'
 
 function ChoiceOption({
   label,
@@ -110,6 +113,36 @@ const opt = StyleSheet.create({
   },
 })
 
+/* ── Progress ring for sidebar ────────────────────────────────────────── */
+function ProgressRing({ size, progress, pageNum }: { size: number; progress: number; pageNum: number }) {
+  const stroke = 3
+  const r = (size - stroke) / 2
+  const cx = size / 2
+  const cy = size / 2
+  const circumference = 2 * Math.PI * r
+  const offset = circumference * (1 - progress)
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <SvgCircle cx={cx} cy={cy} r={r} stroke={Colors.bgSecondary} strokeWidth={stroke} fill="none" />
+        {progress > 0 && (
+          <SvgCircle
+            cx={cx} cy={cy} r={r}
+            stroke={Colors.brandSecondary}
+            strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={`${circumference}`}
+            strokeDashoffset={`${offset}`}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        )}
+      </Svg>
+      <Text style={{ fontSize: 13, fontWeight: '500', color: Colors.neutral3 }}>{pageNum}</Text>
+    </View>
+  )
+}
+
 /* ── Single question card ─────────────────────────────────────────────── */
 function QuestionCard({
   question,
@@ -118,6 +151,10 @@ function QuestionCard({
   setAnswer,
   onNext,
   onLayout,
+  collapsed,
+  subAnswers,
+  setSubAnswer,
+  isLastQuestion,
 }: {
   question: Question
   index: number
@@ -125,6 +162,10 @@ function QuestionCard({
   setAnswer: (val: string | string[]) => void
   onNext?: () => void
   onLayout?: (e: any) => void
+  collapsed?: boolean
+  subAnswers?: Record<string, string | string[]>
+  setSubAnswer?: (subId: string, val: string | string[]) => void
+  isLastQuestion?: boolean
 }) {
   const needsNextBtn = question.type === 'multi_choice' || question.type === 'text' || question.type === 'date'
   const hasAnswer = (() => {
@@ -133,6 +174,18 @@ function QuestionCard({
     return !!answer
   })()
   const nextEnabled = !question.required || hasAnswer
+
+  const disabled = collapsed === true
+
+  if (disabled) {
+    return (
+      <View style={[qcard.wrap, qcard.disabledWrap]} onLayout={onLayout}>
+        <Text style={[qcard.questionText, qcard.disabledText, { marginBottom: 0 }]}>
+          {index + 1}.{'  '}{question.text}
+        </Text>
+      </View>
+    )
+  }
 
   return (
     <View style={qcard.wrap} onLayout={onLayout}>
@@ -207,16 +260,94 @@ function QuestionCard({
         />
       )}
 
-      {/* Next button for multi-select, text, and date */}
-      {needsNextBtn && onNext && (
-        <TouchableOpacity
-          style={[qcard.nextBtn, !nextEnabled && qcard.nextBtnDisabled]}
-          onPress={nextEnabled ? onNext : undefined}
-          activeOpacity={nextEnabled ? 0.85 : 1}
-        >
-          <Text style={[qcard.nextBtnText, !nextEnabled && qcard.nextBtnTextDisabled]}>Next</Text>
-        </TouchableOpacity>
+      {/* Sub-questions — shown when trigger answer is selected */}
+      {/* Sub-questions — shown when trigger answer is selected */}
+      {question.subQuestions && typeof answer === 'string' && question.subQuestions.triggerValues.includes(answer) && (
+        <View style={qcard.subQuestionsWrap}>
+          {question.subQuestions.questions.map(sq => {
+            const sqAnswer = subAnswers?.[sq.id]
+            return (
+              <View key={sq.id} style={qcard.subCard}>
+                <Text style={qcard.subQuestionText}>
+                  {sq.text}
+                  {sq.required && <Text style={qcard.asterisk}> *</Text>}
+                </Text>
+
+                {(sq.type === 'single_choice' || sq.type === 'yes_no') && (
+                  <View style={qcard.optionList}>
+                    {sq.options?.map(o => (
+                      <ChoiceOption
+                        key={o.value}
+                        label={o.label}
+                        selected={sqAnswer === o.value}
+                        onPress={() => setSubAnswer?.(sq.id, o.value)}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {sq.type === 'multi_choice' && (
+                  <View style={qcard.optionList}>
+                    {sq.options?.map(o => {
+                      const arr = (sqAnswer as string[] | undefined) ?? []
+                      return (
+                        <ChoiceOption
+                          key={o.value}
+                          label={o.label}
+                          selected={arr.includes(o.value)}
+                          onPress={() =>
+                            setSubAnswer?.(sq.id, arr.includes(o.value) ? arr.filter(v => v !== o.value) : [...arr, o.value])
+                          }
+                          multi
+                        />
+                      )
+                    })}
+                  </View>
+                )}
+
+                {sq.type === 'text' && (
+                  <TextInput
+                    style={qcard.textArea}
+                    value={(sqAnswer as string) ?? ''}
+                    onChangeText={val => setSubAnswer?.(sq.id, val)}
+                    placeholder="Type your answer here…"
+                    placeholderTextColor={Colors.neutral5}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                )}
+              </View>
+            )
+          })}
+        </View>
       )}
+
+      {/* Next button — for questions with sub-questions, multi-select, text, or date */}
+      {!disabled && onNext && (() => {
+        const showSubNext = question.subQuestions && typeof answer === 'string' && question.subQuestions.triggerValues.includes(answer)
+        const allSubsAnswered = showSubNext
+          ? question.subQuestions!.questions.every(sq => {
+              if (!sq.required) return true
+              const sa = subAnswers?.[sq.id]
+              if (sq.type === 'multi_choice') return Array.isArray(sa) && sa.length > 0
+              if (sq.type === 'text' || sq.type === 'date') return typeof sa === 'string' && sa.trim().length > 0
+              return !!sa
+            })
+          : true
+        const showBtn = showSubNext || needsNextBtn
+        const enabled = allSubsAnswered && (!question.required || hasAnswer) && (!needsNextBtn || hasAnswer)
+        if (!showBtn) return null
+        return (
+          <TouchableOpacity
+            style={[qcard.nextBtn, !enabled && qcard.nextBtnDisabled]}
+            onPress={enabled ? onNext : undefined}
+            activeOpacity={enabled ? 0.85 : 1}
+          >
+            <Text style={[qcard.nextBtnText, !enabled && qcard.nextBtnTextDisabled]}>{isLastQuestion ? 'Submit Assessment' : 'Next'}</Text>
+          </TouchableOpacity>
+        )
+      })()}
     </View>
   )
 }
@@ -230,6 +361,7 @@ const qcard = StyleSheet.create({
     ...Shadows.card,
   },
   questionText: {
+    flex: 1,
     fontSize: Typography.callout.fontSize,
     fontWeight: Typography.regular,
     color: Colors.neutral1,
@@ -240,6 +372,31 @@ const qcard = StyleSheet.create({
   asterisk: {
     color: Colors.errorIcon,
     fontSize: Typography.callout.fontSize,
+  },
+  disabledWrap: {
+    opacity: 0.4,
+  },
+  disabledText: {
+    color: Colors.neutral4,
+  },
+  subQuestionsWrap: {
+    marginTop: 12,
+    gap: 12,
+  },
+  subCard: {
+    borderWidth: 1,
+    borderColor: Colors.bgSecondary,
+    borderRadius: 10,
+    padding: 16,
+    backgroundColor: Colors.white,
+  },
+  subQuestionText: {
+    fontSize: Typography.callout.fontSize,
+    fontWeight: Typography.regular,
+    color: Colors.neutral1,
+    lineHeight: 24,
+    marginBottom: 12,
+    letterSpacing: Typography.callout.letterSpacing,
   },
   optionList: { gap: 2 },
   textArea: {
@@ -292,70 +449,62 @@ const qcard = StyleSheet.create({
 export function AssessmentDetailScreen({ navigation, route }: Props) {
   const { assessmentId } = route.params
   const assessment = mockAssessments.find(a => a.id === assessmentId)
-  const [answers, setAnswers] = useState<Answers>({})
+  const { setProgress, savedAnswers, saveAnswers, currentPage: savedPages, saveCurrentPage } = useAssessmentProgress()
+  const [answers, setAnswersState] = useState<Answers>(() => {
+    if (route.params.readOnly && mockCompletedAnswers[assessmentId]) return { ...mockCompletedAnswers[assessmentId] }
+    if (savedAnswers[assessmentId]) return { ...savedAnswers[assessmentId] }
+    return {}
+  })
+  const setAnswers = (updater: Answers | ((prev: Answers) => Answers)) => {
+    setAnswersState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      saveAnswers(assessmentId, next)
+      return next
+    })
+  }
   const [menuVisible, setMenuVisible] = useState(false)
   const [sideMenuVisible, setSideMenuVisible] = useState(false)
-  const [currentPage, setCurrentPage] = useState(0)
+  const [currentPage, setCurrentPageState] = useState(() => savedPages[assessmentId] ?? 0)
+  const setCurrentPage = (page: number) => {
+    setCurrentPageState(page)
+    saveCurrentPage(assessmentId, page)
+  }
   const scrollRef = useRef<ScrollView>(null)
   const cardOffsets = useRef<number[]>([])
 
   if (!assessment) return null
 
-  /* Already completed */
-  if (assessment.status === 'completed') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.bgPrimary} />
-        <View style={styles.navHeader}>
-          <TouchableOpacity style={styles.navBack} onPress={() => navigation.goBack()}>
-            <Text style={styles.navBackText}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.navTitle}>Check-In</Text>
-          <View style={styles.navHelp}>
-            <Text style={styles.navHelpText}>?</Text>
-          </View>
-        </View>
-        <View style={styles.completedWrap}>
-          <Text style={styles.completedIcon}>✓</Text>
-          <Text style={styles.completedTitle}>Already Completed</Text>
-          <Text style={styles.completedDesc}>
-            You completed this assessment on{' '}
-            {assessment.completedDate
-              ? new Date(assessment.completedDate).toLocaleDateString('en-US', {
-                  month: 'long', day: 'numeric', year: 'numeric',
-                })
-              : 'a previous date'}.
-          </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.primaryBtnText}>Back to Check-Ins</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    )
-  }
+  const readOnly = route.params.readOnly === true
 
   // Use pages if available, otherwise wrap flat questions into a single page
   const pages = assessment.pages && assessment.pages.length > 0
     ? assessment.pages
     : [{ questions: assessment.questions }]
 
-  // Get visible questions for each page (apply skip logic)
-  const getVisibleQuestions = (pageQuestions: typeof assessment.questions) =>
-    pageQuestions.filter(q => {
-      if (!q.showIf) return true
-      const depAnswer = answers[q.showIf.questionId]
-      if (typeof depAnswer === 'string') return q.showIf.values.includes(depAnswer)
-      return false
-    })
+  // Check if a question's skip-logic condition is met (should be active)
+  // Default is active (expanded). Only collapses when the parent question
+  // has been answered with a value NOT in the showIf list.
+  const isQuestionActive = (q: typeof assessment.questions[0]) => {
+    if (!q.showIf) return true
+    const depAnswer = answers[q.showIf.questionId]
+    // If parent hasn't been answered yet, keep expanded (default)
+    if (depAnswer === undefined || depAnswer === '') return true
+    if (typeof depAnswer === 'string') return q.showIf.values.includes(depAnswer)
+    return true
+  }
 
-  const currentPageQuestions = getVisibleQuestions(pages[currentPage]?.questions ?? [])
+  // All questions on the current page (both active and collapsed)
+  const currentPageAllQuestions = pages[currentPage]?.questions ?? []
+  // Active (visible) questions for validation
+  const currentPageQuestions = currentPageAllQuestions.filter(q => isQuestionActive(q))
+
   // Reset offsets when page changes
-  if (cardOffsets.current.length !== currentPageQuestions.length) {
+  if (cardOffsets.current.length !== currentPageAllQuestions.length) {
     cardOffsets.current = []
   }
 
-  // All visible questions across all pages
-  const allVisibleQuestions = pages.flatMap(p => getVisibleQuestions(p.questions))
+  // All active questions across all pages
+  const allVisibleQuestions = pages.flatMap(p => p.questions.filter(q => isQuestionActive(q)))
 
   const answeredCount = allVisibleQuestions.filter(q => {
     const a = answers[q.id]
@@ -363,10 +512,23 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     return !!a
   }).length
 
-  // Check if a page is complete (all required questions answered)
+  // Report progress to shared context
+  const totalRequired = allVisibleQuestions.filter(q => q.required).length
+  const answeredRequired = allVisibleQuestions.filter(q => {
+    if (!q.required) return false
+    const a = answers[q.id]
+    if (q.type === 'multi_choice') return Array.isArray(a) && a.length > 0
+    return !!a
+  }).length
+  const progressPct = totalRequired > 0 ? answeredRequired / totalRequired : 0
+  useEffect(() => {
+    if (!readOnly) setProgress(assessmentId, progressPct)
+  }, [progressPct, readOnly, assessmentId])
+
+  // Check if a page is complete (all required active questions answered)
   const isPageComplete = (pageIndex: number) => {
-    const visible = getVisibleQuestions(pages[pageIndex]?.questions ?? [])
-    return visible.every(q => {
+    const active = (pages[pageIndex]?.questions ?? []).filter(q => isQuestionActive(q))
+    return active.every(q => {
       if (!q.required) return true
       const a = answers[q.id]
       if (q.type === 'multi_choice') return Array.isArray(a) && a.length > 0
@@ -374,10 +536,23 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     })
   }
 
+  // Get page progress as 0–1
+  const getPageProgress = (pageIndex: number) => {
+    const active = (pages[pageIndex]?.questions ?? []).filter(q => isQuestionActive(q))
+    const required = active.filter(q => q.required)
+    if (required.length === 0) return 1
+    const answered = required.filter(q => {
+      const a = answers[q.id]
+      if (q.type === 'multi_choice') return Array.isArray(a) && a.length > 0
+      return !!a
+    }).length
+    return answered / required.length
+  }
+
   // Check if a page has any answers
   const isPageInProgress = (pageIndex: number) => {
-    const visible = getVisibleQuestions(pages[pageIndex]?.questions ?? [])
-    return visible.some(q => {
+    const active = (pages[pageIndex]?.questions ?? []).filter(q => isQuestionActive(q))
+    return active.some(q => {
       const a = answers[q.id]
       if (q.type === 'multi_choice') return Array.isArray(a) && a.length > 0
       return !!a
@@ -385,38 +560,99 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
   }
 
   const [submitError, setSubmitError] = useState('')
+  const [showSkippedDialog, setShowSkippedDialog] = useState(false)
+  const [finishMode, setFinishMode] = useState<typeof allVisibleQuestions | null>(null)
+
+  const getUnanswered = () => allVisibleQuestions.filter(q => {
+    if (!q.required) return false
+    const a = answers[q.id]
+    if (q.type === 'multi_choice') return !Array.isArray(a) || a.length === 0
+    return !a
+  })
 
   const handleSubmit = () => {
-    const unanswered = allVisibleQuestions.filter(q => {
-      if (!q.required) return false
-      const a = answers[q.id]
-      if (q.type === 'multi_choice') return !Array.isArray(a) || a.length === 0
-      return !a
-    })
+    const unanswered = getUnanswered()
     if (unanswered.length > 0) {
-      setSubmitError(`Please answer all required questions (${unanswered.length} remaining).`)
+      setSubmitError('')
+      setShowSkippedDialog(true)
       return
     }
     setSubmitError('')
     navigation.replace('AssessmentList', { completedAssessmentId: assessment.id })
   }
 
-  const goToNextPage = () => {
+  const finishScrollRef = useRef<ScrollView>(null)
+  const finishOffsets = useRef<number[]>([])
+
+  const handleFinishAnswer = (questionId: string, val: string | string[], index: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: val }))
+    if (!finishMode) return
+    const q = finishMode[index]
+    if (q && (q.type === 'single_choice' || q.type === 'yes_no') && !q.subQuestions) {
+      setTimeout(() => {
+        if (index + 1 < finishMode.length && finishOffsets.current[index + 1] !== undefined) {
+          finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[index + 1] - 12), animated: true })
+        }
+      }, 400)
+    }
+  }
+
+  const enterFinishMode = () => {
+    setShowSkippedDialog(false)
+    const unanswered = getUnanswered()
+    setFinishMode(unanswered)
+    // Scroll to top after the finish mode view mounts
+    setTimeout(() => {
+      finishScrollRef.current?.scrollTo({ y: 0, animated: false })
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }, 150)
+  }
+
+  // Check if answering question at index means we're done with the page
+  const isLastActiveOnPage = (index: number, newAnswers: Answers) => {
+    for (let n = index + 1; n < currentPageAllQuestions.length; n++) {
+      const nq = currentPageAllQuestions[n]
+      const nqActive = !nq.showIf || (
+        newAnswers[nq.showIf.questionId] !== undefined &&
+        newAnswers[nq.showIf.questionId] !== '' &&
+        (typeof newAnswers[nq.showIf.questionId] === 'string'
+          ? nq.showIf.values.includes(newAnswers[nq.showIf.questionId] as string)
+          : true)
+      )
+      if (nqActive) return false
+    }
+    return true
+  }
+
+  const scrollToQuestion = (qIndex: number) => {
+    if (qIndex < currentPageAllQuestions.length && cardOffsets.current[qIndex] !== undefined) {
+      // Offset minus content paddingTop so the card sits flush at top
+      scrollRef.current?.scrollTo({ y: Math.max(0, cardOffsets.current[qIndex] - 12), animated: true })
+    }
+  }
+
+  const scrollToNextOrAdvance = (index: number) => {
+    if (index + 1 < currentPageAllQuestions.length) {
+      // Wait for layout to settle (sub-questions may have expanded/collapsed)
+      setTimeout(() => scrollToQuestion(index + 1), 100)
+      return
+    }
+    // No more questions — advance to next page or submit on last page
     if (currentPage < pages.length - 1) {
       setCurrentPage(currentPage + 1)
+      setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 50)
+    } else {
+      handleSubmit()
     }
   }
 
   const handleSetAnswer = (questionId: string, val: string | string[], index: number) => {
-    setAnswers(prev => ({ ...prev, [questionId]: val }))
-    const q = currentPageQuestions[index]
-    if (q && (q.type === 'single_choice' || q.type === 'yes_no')) {
-      const nextOffset = cardOffsets.current[index + 1]
-      if (nextOffset !== undefined) {
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({ y: nextOffset - 16, animated: true })
-        }, 200)
-      }
+    const newAnswers = { ...answers, [questionId]: val }
+    setAnswers(newAnswers)
+    const q = currentPageAllQuestions[index]
+    if (q && (q.type === 'single_choice' || q.type === 'yes_no') && !q.subQuestions) {
+      // Delay to let layout recalculate after skip-logic changes
+      setTimeout(() => scrollToNextOrAdvance(index), 500)
     }
   }
 
@@ -427,12 +663,10 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
       {/* Light nav header */}
       <View style={styles.navHeader}>
         <TouchableOpacity style={styles.navBack} onPress={() => navigation.goBack()}>
-          <Text style={styles.navBackText}>‹</Text>
+          <BackChevronSvg width={14} height={22} color={Colors.neutral2} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Check-In</Text>
-        <View style={styles.navHelp}>
-          <Text style={styles.navHelpText}>?</Text>
-        </View>
+        <HelpSvg width={24} height={24} color={Colors.neutral2} />
       </View>
 
       {/* Side menu overlay */}
@@ -465,9 +699,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                         <Text style={styles.sideCheckMark}>✓</Text>
                       </View>
                     ) : (
-                      <View style={[styles.sideProgressRing, inProgress && styles.sideProgressRingActive]}>
-                        <Text style={styles.sidePageNum}>{i + 1}</Text>
-                      </View>
+                      <ProgressRing size={36} progress={getPageProgress(i)} pageNum={i + 1} />
                     )}
                   </TouchableOpacity>
                 )
@@ -479,34 +711,61 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
 
       {/* Sub-header: hamburger + page count + Submit button */}
       <View style={styles.subHeader}>
-        <View style={styles.subHeaderLeft}>
-          <TouchableOpacity onPress={() => setSideMenuVisible(true)} activeOpacity={0.7}>
-            <HamburgerSvg width={24} height={20} color={Colors.brandSecondary} />
-          </TouchableOpacity>
+        <TouchableOpacity onPress={() => setSideMenuVisible(true)} activeOpacity={0.7}>
+          <HamburgerSvg width={24} height={20} color={Colors.brandSecondary} />
+        </TouchableOpacity>
+        <View style={styles.subHeaderPage}>
           <PageSvg width={20} height={20} color={Colors.neutral2} />
           <Text style={styles.subHeaderText}>
             Page {currentPage + 1} of {pages.length}
           </Text>
         </View>
-        <View>
-          <TouchableOpacity onPress={() => setMenuVisible(true)} activeOpacity={0.85}>
-            <SubmitButtonSvg width={149} height={51} />
-          </TouchableOpacity>
-          <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
-            <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
-              <Pressable style={styles.menuDropdown} onPress={e => e.stopPropagation()}>
-                <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setTimeout(handleSubmit, 100) }} activeOpacity={0.7}>
-                  <Text style={styles.menuItemText}>Submit</Text>
-                </TouchableOpacity>
-                <View style={styles.menuDivider} />
-                <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setTimeout(() => navigation.goBack(), 100) }} activeOpacity={0.7}>
-                  <Text style={styles.menuItemText}>Save and Close</Text>
-                </TouchableOpacity>
-              </Pressable>
-            </Pressable>
-          </Modal>
-        </View>
+        <View style={{ flex: 1 }} />
+        {readOnly ? (
+          <View style={styles.readOnlyBadge}>
+            <Text style={styles.readOnlyText}>View Only</Text>
+          </View>
+        ) : (
+          <View style={styles.submitWrap}>
+            <TouchableOpacity onPress={() => setMenuVisible(!menuVisible)} activeOpacity={0.85}>
+              <SubmitButtonSvg width={149} height={51} />
+            </TouchableOpacity>
+            {menuVisible && (
+              <>
+                <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)} />
+                <View style={styles.menuDropdown}>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setTimeout(handleSubmit, 100) }} activeOpacity={0.7}>
+                    <Text style={styles.menuItemText}>Submit</Text>
+                  </TouchableOpacity>
+                  <View style={styles.menuDivider} />
+                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setTimeout(() => navigation.goBack(), 100) }} activeOpacity={0.7}>
+                    <Text style={styles.menuItemText}>Save and Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </View>
+
+      {/* Skipped questions dialog */}
+      <Modal visible={showSkippedDialog} transparent animationType="fade" onRequestClose={() => setShowSkippedDialog(false)}>
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogBox}>
+            <Text style={styles.dialogTitle}>You skipped required questions</Text>
+            <Text style={styles.dialogMessage}>You must complete these questions before submitting your assessment.</Text>
+            <View style={styles.dialogButtons}>
+              <TouchableOpacity style={styles.dialogBtn} onPress={() => setShowSkippedDialog(false)} activeOpacity={0.7}>
+                <Text style={styles.dialogBtnTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.dialogBtnDivider} />
+              <TouchableOpacity style={styles.dialogBtn} onPress={enterFinishMode} activeOpacity={0.7}>
+                <Text style={styles.dialogBtnTextAction}>Finish Questions</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Error banner */}
       {submitError !== '' && (
@@ -515,66 +774,96 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* Current page — all questions on this page */}
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {pages[currentPage]?.title && (
-          <Text style={styles.pageHeading}>{pages[currentPage].title}</Text>
-        )}
-
-        {currentPageQuestions.map((q, i) => (
-          <QuestionCard
-            key={q.id}
-            question={q}
-            index={i}
-            answer={answers[q.id]}
-            setAnswer={val => handleSetAnswer(q.id, val, i)}
-            onNext={() => {
-              const nextOffset = cardOffsets.current[i + 1]
-              if (nextOffset !== undefined) {
-                scrollRef.current?.scrollTo({ y: nextOffset - 16, animated: true })
-              }
-            }}
-            onLayout={e => { cardOffsets.current[i] = e.nativeEvent.layout.y }}
-          />
-        ))}
-
-        {/* Page navigation buttons */}
-        <View style={styles.pageNav}>
-          {currentPage > 0 && (
-            <TouchableOpacity
-              style={styles.pageNavBtn}
-              onPress={() => setCurrentPage(currentPage - 1)}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.pageNavBtnText}>Previous</Text>
-            </TouchableOpacity>
-          )}
-          <View style={{ flex: 1 }} />
-          {currentPage < pages.length - 1 ? (
-            <TouchableOpacity
-              style={[styles.pageNavBtn, styles.pageNavBtnPrimary]}
-              onPress={goToNextPage}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.pageNavBtnTextPrimary}>Next</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.pageNavBtn, styles.pageNavBtnPrimary]}
-              onPress={handleSubmit}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.pageNavBtnTextPrimary}>Submit</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
+      {finishMode ? (
+        /* Finish mode — show all unanswered required questions on one page */
+        <ScrollView
+          ref={finishScrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {finishMode.map((fq, fi) => {
+            const allQs = pages.flatMap(p => p.questions)
+            const globalIdx = allQs.findIndex(q => q.id === fq.id)
+            return (
+              <QuestionCard
+                key={fq.id}
+                question={fq}
+                index={globalIdx >= 0 ? globalIdx : 0}
+                answer={answers[fq.id]}
+                setAnswer={val => handleFinishAnswer(fq.id, val, fi)}
+                onLayout={e => { finishOffsets.current[fi] = e.nativeEvent.layout.y }}
+                onNext={() => {
+                  if (fi + 1 < finishMode.length && finishOffsets.current[fi + 1] !== undefined) {
+                    finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[fi + 1] - 12), animated: true })
+                  }
+                }}
+                subAnswers={answers}
+                setSubAnswer={(subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
+                isLastQuestion={fi === finishMode.length - 1}
+              />
+            )
+          })}
+          {(() => {
+            const allAnswered = finishMode.every(fq => {
+              const a = answers[fq.id]
+              if (fq.type === 'multi_choice') return Array.isArray(a) && a.length > 0
+              if (fq.type === 'text' || fq.type === 'date') return typeof a === 'string' && a.trim().length > 0
+              return !!a
+            })
+            return (
+              <TouchableOpacity
+                style={[styles.finishNextBtn, !allAnswered && styles.finishNextBtnDisabled]}
+                onPress={allAnswered ? () => {
+                  setFinishMode(null)
+                  navigation.replace('AssessmentList', { completedAssessmentId: assessment.id })
+                } : undefined}
+                activeOpacity={allAnswered ? 0.85 : 1}
+              >
+                <Text style={[styles.finishNextBtnText, !allAnswered && styles.finishNextBtnTextDisabled]}>
+                  Submit Assessment
+                </Text>
+              </TouchableOpacity>
+            )
+          })()}
+        </ScrollView>
+      ) : (
+        /* Normal mode — current page questions */
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          pointerEvents={readOnly ? 'box-none' : 'auto'}
+        >
+          {(() => {
+            let globalOffset = 0
+            for (let p = 0; p < currentPage; p++) {
+              globalOffset += (pages[p]?.questions ?? []).length
+            }
+            return currentPageAllQuestions.map((q, i) => {
+            const active = isQuestionActive(q)
+            return (
+              <QuestionCard
+                key={q.id}
+                question={q}
+                index={globalOffset + i}
+                answer={answers[q.id]}
+                setAnswer={readOnly ? () => {} : val => handleSetAnswer(q.id, val, i)}
+                collapsed={!active}
+                onNext={readOnly ? undefined : () => scrollToNextOrAdvance(i)}
+                onLayout={e => { cardOffsets.current[i] = e.nativeEvent.layout.y }}
+                subAnswers={answers}
+                setSubAnswer={readOnly ? undefined : (subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
+                isLastQuestion={currentPage === pages.length - 1 && i === currentPageAllQuestions.length - 1}
+              />
+            )
+            })
+          })()}
+        </ScrollView>
+      )}
     </SafeAreaView>
   )
 }
@@ -604,39 +893,26 @@ const styles = StyleSheet.create({
   navTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.regular,
+    fontFamily: 'Merriweather-Light',
+    fontSize: 17,
     color: Colors.neutral2,
     letterSpacing: -0.32,
-  },
-  navHelp: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderColor: Colors.neutral3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navHelpText: {
-    fontSize: Typography.subheadline.fontSize,
-    color: Colors.neutral3,
-    fontWeight: Typography.medium,
   },
 
   // Sub-header bar
   subHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: Colors.bgPrimary,
+    zIndex: 20,
   },
-  subHeaderLeft: {
+  subHeaderPage: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginLeft: 16,
   },
   subHeaderText: {
     fontSize: Typography.subheadline.fontSize,
@@ -660,20 +936,29 @@ const styles = StyleSheet.create({
   },
 
   // Menu dropdown
+  submitWrap: {
+    position: 'relative',
+    zIndex: 20,
+  },
   menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 140,
-    paddingRight: 16,
+    position: 'fixed' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9,
   },
   menuDropdown: {
+    position: 'absolute',
+    top: 56,
+    right: 0,
     backgroundColor: Colors.white,
     borderRadius: Radii.card,
     minWidth: 180,
     ...Shadows.modal,
     overflow: 'hidden',
+    zIndex: 30,
+    elevation: 30,
   },
   menuItem: {
     paddingVertical: 14,
@@ -683,6 +968,96 @@ const styles = StyleSheet.create({
     fontSize: Typography.callout.fontSize,
     color: Colors.neutral2,
     letterSpacing: Typography.callout.letterSpacing,
+  },
+  // Finish mode
+  finishNextBtn: {
+    backgroundColor: '#0E98BE',
+    borderRadius: Radii.button,
+    height: 51,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  finishNextBtnDisabled: {
+    backgroundColor: '#86CBDF',
+  },
+  finishNextBtnText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: -0.32,
+  },
+  finishNextBtnTextDisabled: {
+    opacity: 0.8,
+  },
+
+  // iOS-style dialog
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  dialogBox: {
+    backgroundColor: 'rgba(242,242,242,0.95)',
+    borderRadius: 14,
+    width: '100%',
+    maxWidth: 300,
+    overflow: 'hidden',
+  },
+  dialogTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.neutral1,
+    textAlign: 'center',
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+  },
+  dialogMessage: {
+    fontSize: 13,
+    color: Colors.neutral2,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    lineHeight: 18,
+  },
+  dialogButtons: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.2)',
+  },
+  dialogBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogBtnDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  dialogBtnTextCancel: {
+    fontSize: 17,
+    color: '#007AFF',
+  },
+  dialogBtnTextAction: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+
+  readOnlyBadge: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  readOnlyText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.neutral3,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
@@ -752,24 +1127,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
   },
-  sideProgressRing: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: Colors.bgSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.white,
-  },
-  sideProgressRingActive: {
-    borderColor: Colors.brandSecondary,
-  },
-  sidePageNum: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.neutral3,
-  },
 
   // Page heading
   pageHeading: {
@@ -779,36 +1136,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Page navigation
-  pageNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  pageNavBtn: {
-    borderWidth: 1,
-    borderColor: Colors.brandSecondary,
-    borderRadius: Radii.button,
-    height: 44,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageNavBtnPrimary: {
-    backgroundColor: Colors.brandSecondary,
-    borderColor: Colors.brandSecondary,
-  },
-  pageNavBtnText: {
-    fontSize: 15,
-    fontWeight: Typography.medium,
-    color: Colors.brandSecondary,
-  },
-  pageNavBtnTextPrimary: {
-    fontSize: 15,
-    fontWeight: Typography.medium,
-    color: Colors.white,
-  },
 
   // Bottom submit pill
   primaryBtn: {

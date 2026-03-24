@@ -136,8 +136,8 @@ export const mockAssessments: Assessment[] = [
     description: 'Social Determinants of Health screening to identify social and environmental factors affecting your health.',
     category: 'Social Determinants',
     estimatedMinutes: 8,
-    status: 'due',
-    dueDate: '2026-03-28',
+    status: 'completed',
+    completedDate: '2026-03-15',
     questions: [
       {
         id: 'sdoh_1',
@@ -350,6 +350,45 @@ export const mockAssessments: Assessment[] = [
       {
         title: 'Lifestyle & Daily Living',
         questions: [
+          {
+            id: 'hra_pain',
+            text: 'Are you experiencing pain?',
+            type: 'single_choice',
+            required: true,
+            options: [
+              { value: 'yes', label: 'Yes' },
+              { value: 'no', label: 'No' },
+            ],
+            subQuestions: {
+              triggerValues: ['yes'],
+              questions: [
+                {
+                  id: 'hra_pain_type',
+                  text: 'Which of the following are you currently experiencing?',
+                  type: 'multi_choice',
+                  required: true,
+                  options: [
+                    { value: 'sharp', label: 'Sharp or stabbing pain' },
+                    { value: 'dull', label: 'Dull or aching pain' },
+                    { value: 'burning', label: 'Burning sensation' },
+                    { value: 'throbbing', label: 'Throbbing pain' },
+                    { value: 'stiffness', label: 'Stiffness or tension' },
+                    { value: 'other', label: 'Other' },
+                  ],
+                },
+                {
+                  id: 'hra_pain_daily',
+                  text: 'Does it interfere with your daily activities?',
+                  type: 'single_choice',
+                  required: true,
+                  options: [
+                    { value: 'yes', label: 'Yes' },
+                    { value: 'no', label: 'No' },
+                  ],
+                },
+              ],
+            },
+          },
           { id: 'hra_11', text: 'How many days per week do you engage in at least 30 minutes of physical activity?', type: 'single_choice', required: true, options: [{ value: '0', label: '0 days' }, { value: '1-2', label: '1–2 days' }, { value: '3-4', label: '3–4 days' }, { value: '5+', label: '5 or more days' }] },
           { id: 'hra_12', text: 'How would you describe your typical diet?', type: 'single_choice', required: true, options: [{ value: 'very_healthy', label: 'Very healthy — mostly fruits, vegetables, lean proteins' }, { value: 'somewhat_healthy', label: 'Somewhat healthy' }, { value: 'average', label: 'Average' }, { value: 'unhealthy', label: 'Could be improved significantly' }] },
           { id: 'hra_13', text: 'On average, how many hours of sleep do you get per night?', type: 'single_choice', required: true, options: [{ value: 'less_5', label: 'Less than 5 hours' }, { value: '5-6', label: '5–6 hours' }, { value: '7-8', label: '7–8 hours' }, { value: 'more_8', label: 'More than 8 hours' }] },
@@ -380,3 +419,17 @@ export const mockAssessments: Assessment[] = [
     ],
   },
 ]
+
+// Mock completed answers for read-only view
+export const mockCompletedAnswers: Record<string, Record<string, string | string[]>> = {
+  sdoh: {
+    sdoh_1: 'own',
+    sdoh_2: 'no',
+    sdoh_3: 'no',
+    sdoh_4: 'rarely',
+    sdoh_5: 'sometimes',
+    sdoh_6: 'no',
+    sdoh_7: 'full_time',
+    sdoh_8: 'No additional concerns at this time.',
+  },
+}

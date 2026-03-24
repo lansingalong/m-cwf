@@ -2,6 +2,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { useFonts } from 'expo-font'
 import { Merriweather_400Regular } from '@expo-google-fonts/merriweather/400Regular'
+import { Merriweather_300Light } from '@expo-google-fonts/merriweather/300Light'
 import { ActivityIndicator, View } from 'react-native'
 import { LoginScreen } from './src/screens/LoginScreen'
 import { AssessmentListScreen } from './src/screens/AssessmentListScreen'
@@ -9,12 +10,14 @@ import { AssessmentDetailScreen } from './src/screens/AssessmentDetailScreen'
 import { AssessmentCompleteScreen } from './src/screens/AssessmentCompleteScreen'
 import { ProfileScreen } from './src/screens/ProfileScreen'
 import { RootStackParamList } from './src/types'
+import { AssessmentProgressProvider } from './src/context/AssessmentProgress'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function App() {
   const [fontsLoaded] = useFonts({
     'Merriweather-Regular': Merriweather_400Regular,
+    'Merriweather-Light': Merriweather_300Light,
   })
 
   if (!fontsLoaded) {
@@ -22,6 +25,7 @@ export default function App() {
   }
 
   return (
+    <AssessmentProgressProvider>
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName="Login"
@@ -34,5 +38,6 @@ export default function App() {
         <Stack.Screen name="Profile" component={ProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>
+    </AssessmentProgressProvider>
   )
 }

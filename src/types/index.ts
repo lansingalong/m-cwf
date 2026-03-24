@@ -6,6 +6,14 @@ export interface QuestionOption {
   score?: number
 }
 
+export interface SubQuestion {
+  id: string
+  text: string
+  type: QuestionType
+  options?: QuestionOption[]
+  required: boolean
+}
+
 export interface Question {
   id: string
   text: string
@@ -17,6 +25,7 @@ export interface Question {
   scaleMinLabel?: string
   scaleMaxLabel?: string
   showIf?: { questionId: string; values: string[] }
+  subQuestions?: { triggerValues: string[]; questions: SubQuestion[] }
 }
 
 export interface AssessmentPage {
@@ -52,7 +61,7 @@ export interface Member {
 export type RootStackParamList = {
   Login: undefined
   AssessmentList: { completedAssessmentId?: string } | undefined
-  AssessmentDetail: { assessmentId: string }
+  AssessmentDetail: { assessmentId: string; readOnly?: boolean }
   AssessmentComplete: { assessmentId: string; score?: number; scoreLabel?: string }
   Profile: undefined
 }

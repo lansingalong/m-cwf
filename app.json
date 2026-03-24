@@ -28,9 +28,6 @@
       "output": "single",
       "bundler": "metro"
     },
-    "experiments": {
-      "baseUrl": "/assessments-cwf"
-    },
     "plugins": [
       "expo-font"
     ]
