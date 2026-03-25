@@ -198,42 +198,47 @@ function QuestionCard({
         {question.required && <Text style={qcard.asterisk}> *</Text>}
       </Text>
 
-      <View style={readOnly ? { opacity: 0.6 } : undefined} pointerEvents={readOnly ? 'none' : 'auto'}>
+      <View>
       {/* Single / yes_no */}
       {(question.type === 'single_choice' || question.type === 'yes_no') && (
         <View style={qcard.optionList}>
-          {question.options?.map(o => (
-            <ChoiceOption
-              key={o.value}
-              label={o.label}
-              selected={answer === o.value}
-              onPress={() => setAnswer(o.value)}
-            />
-          ))}
+          {readOnly
+            ? question.options?.filter(o => o.value === answer).map(o => (
+                <ChoiceOption key={o.value} label={o.label} selected onPress={() => {}} />
+              ))
+            : question.options?.map(o => (
+                <ChoiceOption key={o.value} label={o.label} selected={answer === o.value} onPress={() => setAnswer(o.value)} />
+              ))
+          }
         </View>
       )}
 
       {/* Multi select */}
       {question.type === 'multi_choice' && (
         <View style={qcard.optionList}>
-          {question.options?.map(o => {
-            const arr = (answer as string[] | undefined) ?? []
-            return (
-              <ChoiceOption
-                key={o.value}
-                label={o.label}
-                selected={arr.includes(o.value)}
-                onPress={() =>
-                  setAnswer(
-                    arr.includes(o.value)
-                      ? arr.filter(v => v !== o.value)
-                      : [...arr, o.value]
-                  )
-                }
-                multi
-              />
-            )
-          })}
+          {readOnly
+            ? question.options?.filter(o => ((answer as string[] | undefined) ?? []).includes(o.value)).map(o => (
+                <ChoiceOption key={o.value} label={o.label} selected multi onPress={() => {}} />
+              ))
+            : question.options?.map(o => {
+                const arr = (answer as string[] | undefined) ?? []
+                return (
+                  <ChoiceOption
+                    key={o.value}
+                    label={o.label}
+                    selected={arr.includes(o.value)}
+                    onPress={() =>
+                      setAnswer(
+                        arr.includes(o.value)
+                          ? arr.filter(v => v !== o.value)
+                          : [...arr, o.value]
+                      )
+                    }
+                    multi
+                  />
+                )
+              })
+          }
         </View>
       )}
 
@@ -248,20 +253,48 @@ function QuestionCard({
           multiline
           numberOfLines={4}
           textAlignVertical="top"
+          editable={!readOnly}
         />
       )}
 
-      {/* Date selector */}
+      {/* Date selector — native calendar picker on web */}
       {question.type === 'date' && (
-        <TextInput
-          style={qcard.dateInput}
-          value={(answer as string) ?? ''}
-          onChangeText={val => setAnswer(val)}
-          placeholder="MM/DD/YYYY"
-          placeholderTextColor={Colors.neutral5}
-          keyboardType="numbers-and-punctuation"
-          maxLength={10}
-        />
+        Platform.OS === 'web' ? (
+          <View style={qcard.dateWrap}>
+            <input
+              type="date"
+              value={(answer as string) ?? ''}
+              onChange={(e: any) => setAnswer(e.target.value)}
+              disabled={readOnly}
+              style={{
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                height: 48,
+                border: `1px solid ${Colors.bgSecondary}`,
+                borderRadius: 8,
+                padding: '0 14px',
+                fontSize: 16,
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: Colors.neutral2,
+                backgroundColor: Colors.white,
+                outline: 'none',
+                cursor: 'pointer',
+              } as any}
+            />
+          </View>
+        ) : (
+          <TextInput
+            style={qcard.dateInput}
+            value={(answer as string) ?? ''}
+            onChangeText={val => setAnswer(val)}
+            placeholder="MM/DD/YYYY"
+            placeholderTextColor={Colors.neutral5}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            editable={!readOnly}
+          />
+        )
       )}
 
       {/* Sub-questions — shown when trigger answer is selected */}
@@ -363,6 +396,7 @@ const qcard = StyleSheet.create({
     borderRadius: Radii.card,
     padding: 20,
     marginBottom: 12,
+    overflow: 'hidden',
     ...Shadows.card,
   },
   questionText: {
@@ -415,6 +449,9 @@ const qcard = StyleSheet.create({
     lineHeight: 22,
     outlineStyle: 'none' as any,
     letterSpacing: Typography.callout.letterSpacing,
+    marginTop: 4,
+  },
+  dateWrap: {
     marginTop: 4,
   },
   dateInput: {
@@ -591,28 +628,17 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
   const finishOffsets = useRef<number[]>([])
   const finishCardRefs = useRef<(View | null)[]>([])
 
-  const getFinishDomOffset = (ref: View | null): number | null => {
-    if (!ref || Platform.OS !== 'web') return null
-    try {
-      const el = ref as any
-      if (typeof el.offsetTop === 'number' && el.offsetParent) {
-        let top = 0
-        let node = el
-        while (node && node !== (finishScrollRef.current as any)) {
-          top += node.offsetTop || 0
-          node = node.offsetParent
-        }
-        return top
-      }
-    } catch {}
-    return null
-  }
-
   const scrollToFinishQuestion = (qIndex: number) => {
-    const freshOffset = getFinishDomOffset(finishCardRefs.current[qIndex])
-    if (freshOffset !== null) {
-      finishScrollRef.current?.scrollTo({ y: Math.max(0, freshOffset), animated: true })
-      return
+    const cardEl = finishCardRefs.current[qIndex] as any
+    if (Platform.OS === 'web' && cardEl && typeof cardEl.getBoundingClientRect === 'function') {
+      const scrollInfo = getScrollTop(finishScrollRef.current)
+      if (scrollInfo) {
+        const cardRect = cardEl.getBoundingClientRect()
+        const scrollRect = scrollInfo.node.getBoundingClientRect()
+        const offset = cardRect.top - scrollRect.top + scrollInfo.scrollTop
+        finishScrollRef.current?.scrollTo({ y: Math.max(0, offset), animated: true })
+        return
+      }
     }
     if (finishOffsets.current[qIndex] !== undefined) {
       finishScrollRef.current?.scrollTo({ y: Math.max(0, finishOffsets.current[qIndex]), animated: true })
@@ -655,31 +681,41 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     return true
   }
 
-  const getDomOffset = (ref: View | null): number | null => {
-    if (!ref || Platform.OS !== 'web') return null
+  const getScrollTop = (scrollViewRef: any): { node: HTMLElement; scrollTop: number } | null => {
+    if (Platform.OS !== 'web') return null
     try {
-      const el = ref as any
-      // react-native-web View refs are DOM elements
-      if (typeof el.offsetTop === 'number' && el.offsetParent) {
-        let top = 0
-        let node = el
-        // Walk up to the scroll container to get total offset
-        while (node && node !== (scrollRef.current as any)) {
-          top += node.offsetTop || 0
-          node = node.offsetParent
+      const el = scrollViewRef as any
+      // react-native-web ScrollView: the ref itself or its inner scrollable child
+      const candidates = [el, el?.getScrollableNode?.(), el?.getInnerViewNode?.(), el?._nativeRef?.current]
+      for (const node of candidates) {
+        if (node && typeof node.scrollTop === 'number' && typeof node.getBoundingClientRect === 'function') {
+          return { node, scrollTop: node.scrollTop }
         }
-        return top
+      }
+      // Try to find scrollable child div
+      if (el && el.childNodes) {
+        for (let i = 0; i < el.childNodes.length; i++) {
+          const child = el.childNodes[i] as HTMLElement
+          if (child && typeof child.scrollTop === 'number' && child.scrollHeight > child.clientHeight) {
+            return { node: child, scrollTop: child.scrollTop }
+          }
+        }
       }
     } catch {}
     return null
   }
 
   const scrollToQuestion = (qIndex: number) => {
-    // Try fresh DOM measurement on web
-    const freshOffset = getDomOffset(cardRefs.current[qIndex])
-    if (freshOffset !== null) {
-      scrollRef.current?.scrollTo({ y: Math.max(0, freshOffset), animated: true })
-      return
+    const cardEl = cardRefs.current[qIndex] as any
+    if (Platform.OS === 'web' && cardEl && typeof cardEl.getBoundingClientRect === 'function') {
+      const scrollInfo = getScrollTop(scrollRef.current)
+      if (scrollInfo) {
+        const cardRect = cardEl.getBoundingClientRect()
+        const scrollRect = scrollInfo.node.getBoundingClientRect()
+        const offset = cardRect.top - scrollRect.top + scrollInfo.scrollTop
+        scrollRef.current?.scrollTo({ y: Math.max(0, offset), animated: true })
+        return
+      }
     }
     // Fallback to cached offset
     if (cardOffsets.current[qIndex] !== undefined) {
@@ -689,7 +725,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
 
   const scrollToNextOrAdvance = (index: number) => {
     if (index + 1 < currentPageAllQuestions.length) {
-      setTimeout(() => scrollToQuestion(index + 1), 50)
+      setTimeout(() => scrollToQuestion(index + 1), 150)
       return
     }
     // No more questions — advance to next page or submit on last page
@@ -904,7 +940,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                   answer={answers[q.id]}
                   setAnswer={readOnly ? () => {} : val => handleSetAnswer(q.id, val, i)}
                   collapsed={!active}
-                  onNext={readOnly ? undefined : () => scrollToNextOrAdvance(i)}
+                  onNext={readOnly ? undefined : () => setTimeout(() => scrollToNextOrAdvance(i), 50)}
                   subAnswers={answers}
                   setSubAnswer={readOnly ? undefined : (subId, val) => setAnswers(prev => ({ ...prev, [subId]: val }))}
                   isLastQuestion={currentPage === pages.length - 1 && i === currentPageAllQuestions.length - 1}
