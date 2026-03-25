@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, createElement } from 'react'
 import { Platform } from 'react-native'
 import {
   View,
@@ -113,6 +113,43 @@ const opt = StyleSheet.create({
     flex: 1,
   },
 })
+
+/* ── Date input (renders native <input type="date"> on web) ──────────── */
+function DateInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  if (Platform.OS === 'web') {
+    return createElement('input', {
+      type: 'date',
+      value: value || '',
+      onChange: (e: any) => onChange(e.target.value),
+      disabled,
+      style: {
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        height: 48,
+        border: `1px solid ${Colors.bgSecondary}`,
+        borderRadius: 8,
+        padding: '0 14px',
+        fontSize: 16,
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        color: Colors.neutral2,
+        backgroundColor: Colors.white,
+        outline: 'none',
+        cursor: 'pointer',
+      },
+    })
+  }
+  return (
+    <TextInput
+      style={{ borderWidth: 1, borderColor: Colors.bgSecondary, borderRadius: 8, padding: 14, fontSize: 16, color: Colors.neutral2, height: 48 }}
+      value={value}
+      onChangeText={onChange}
+      placeholder="MM/DD/YYYY"
+      placeholderTextColor={Colors.neutral5}
+      editable={!disabled}
+    />
+  )
+}
 
 /* ── Progress ring for sidebar ────────────────────────────────────────── */
 function ProgressRing({ size, progress, pageNum }: { size: number; progress: number; pageNum: number }) {
@@ -257,44 +294,11 @@ function QuestionCard({
         />
       )}
 
-      {/* Date selector — native calendar picker on web */}
+      {/* Date selector */}
       {question.type === 'date' && (
-        Platform.OS === 'web' ? (
-          <View style={qcard.dateWrap}>
-            <input
-              type="date"
-              value={(answer as string) ?? ''}
-              onChange={(e: any) => setAnswer(e.target.value)}
-              disabled={readOnly}
-              style={{
-                width: '100%',
-                maxWidth: '100%',
-                boxSizing: 'border-box',
-                height: 48,
-                border: `1px solid ${Colors.bgSecondary}`,
-                borderRadius: 8,
-                padding: '0 14px',
-                fontSize: 16,
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                color: Colors.neutral2,
-                backgroundColor: Colors.white,
-                outline: 'none',
-                cursor: 'pointer',
-              } as any}
-            />
-          </View>
-        ) : (
-          <TextInput
-            style={qcard.dateInput}
-            value={(answer as string) ?? ''}
-            onChangeText={val => setAnswer(val)}
-            placeholder="MM/DD/YYYY"
-            placeholderTextColor={Colors.neutral5}
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-            editable={!readOnly}
-          />
-        )
+        <View style={qcard.dateWrap}>
+          <DateInput value={(answer as string) ?? ''} onChange={val => setAnswer(val)} disabled={readOnly} />
+        </View>
       )}
 
       {/* Sub-questions — shown when trigger answer is selected */}
