@@ -532,11 +532,24 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
       const p = (n: number) => String(n).padStart(2, '0')
       const completedAt = `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`
       const name = assessmentIdToName[id]
-      const updated = all.map((item: any) =>
-        item.memberKey === 'jackson-thomas' && item.assessment === name
-          ? { ...item, status: 'Completed', completedAt }
-          : item
-      )
+      const existingIdx = all.findIndex((item: any) => item.memberKey === 'jackson-thomas' && item.assessment === name)
+      let updated
+      if (existingIdx >= 0) {
+        updated = all.map((item: any, i: number) =>
+          i === existingIdx ? { ...item, status: 'Completed', completedAt } : item
+        )
+      } else {
+        // Standalone demo (no gc-cwf-activity assignment) — add a completed entry so
+        // gc-cwf-activity's storage event listener can pick it up and sync Activity Summary
+        updated = [...all, {
+          memberKey: 'jackson-thomas',
+          assessment: name,
+          addedBy: 'Beatrice Kanya',
+          date: `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()}`,
+          status: 'Completed',
+          completedAt,
+        }]
+      }
       ls.setItem('wf_member_checklist', JSON.stringify(updated))
     } catch {}
   }
