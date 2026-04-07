@@ -154,15 +154,59 @@ const tk = StyleSheet.create({
 /* ─────────────────────────────────────────────────────────────────────────
    MAIN SCREEN
 ───────────────────────────────────────────────────────────────────────── */
+type AssignedAssessment = { assessment: string; addedBy: string; date: string; status: string }
+
+const assessmentIdMap: Record<string, string> = {
+  'Health Risk Assessment':                              'hra',
+  'Comprehensive Assessment':                            'comprehensive',
+  'Functional Status Assessment':                        'functional',
+  'Social Determinants of Health (SDOH) Assessment':     'sdoh',
+  'Pediatric HRA':                                       'pediatric_hra',
+  'Oncology HRA':                                        'oncology_hra',
+  'Fall Risk Assessment':                                'fall',
+  'Fall Risk Prevention':                                'fall_prevention',
+  'Transitions of Care (TOC) 1 Pre-Discharge':           'toc_pre',
+  'Transitions of Care (TOC) 3 Home Visit':              'toc_home',
+}
+
 export function AssessmentListScreen({ navigation, route }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
-
+  const [assignedAssessments, setAssignedAssessments] = useState<AssignedAssessment[]>([])
   useEffect(() => {
     const id = route.params?.completedAssessmentId
     if (id) setCompletedIds(prev => new Set(prev).add(id))
   }, [route.params?.completedAssessmentId])
 
-  const hraCompleted = completedIds.has('hra')
+  useEffect(() => {
+    const load = () => {
+      try {
+        const stored = (window as any).localStorage?.getItem('wf_member_checklist')
+        if (stored) {
+          const all: AssignedAssessment[] = JSON.parse(stored)
+          // Only show items explicitly assigned to Jackson Thomas; deduplicate by assessment name
+          const seen = new Set<string>()
+          const filtered = all.filter(item => {
+            const key = (item as any).memberKey
+            if (key !== 'jackson-thomas') return false
+            if (seen.has(item.assessment)) return false
+            seen.add(item.assessment)
+            return true
+          })
+          setAssignedAssessments(filtered)
+        }
+      } catch {}
+    }
+    load()
+    window.addEventListener('storage', load)
+    return () => window.removeEventListener('storage', load)
+  }, [])
+
+  const pendingAssessments = assignedAssessments.filter(
+    item => !completedIds.has(assessmentIdMap[item.assessment] ?? 'hra')
+  )
+  const completedAssessments = assignedAssessments.filter(
+    item => completedIds.has(assessmentIdMap[item.assessment] ?? 'hra')
+  )
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -193,32 +237,34 @@ export function AssessmentListScreen({ navigation, route }: Props) {
           title="10:00 AM: Take a walk"
         />
 
-        {/* Check-In — .task-card with care tag (only in Today if not completed) */}
-        {!hraCompleted && (
+        {/* Pending assessments assigned from gc-cwf-activity */}
+        {pendingAssessments.map((item, i) => (
           <TaskCard
+            key={i}
             IconComponent={CheckInSvg}
             typeLabel="Check-In"
-            title="Health Risk Assessment"
+            title={item.assessment}
             tag="Digital Intake Assessment"
-            onPress={() => navigation.navigate('AssessmentDetail', { assessmentId: 'hra' })}
+            onPress={() => navigation.navigate('AssessmentDetail', { assessmentId: assessmentIdMap[item.assessment] ?? 'hra' })}
           />
-        )}
+        ))}
 
         {/* ── Complete section ── */}
         <View style={[styles.sectionRow, { marginTop: 14 }]}>
           <Text style={styles.sectionTitle}>Complete</Text>
         </View>
 
-        {/* HRA — completed (moves here after submission) */}
-        {hraCompleted && (
+        {/* Completed assessments — move here after submission */}
+        {completedAssessments.map((item, i) => (
           <TaskCard
+            key={i}
             IconComponent={CheckInSvg}
             typeLabel="Check-In"
-            title="Health Risk Assessment"
+            title={item.assessment}
             tag="Digital Intake Assessment"
             completed
           />
-        )}
+        ))}
 
         {/* Medication — completed task card */}
         <TaskCard
@@ -284,3 +330,4 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: Typography.navigation.fontSize, color: Colors.neutral3, letterSpacing: Typography.navigation.letterSpacing },
   tabActive:{ color: Colors.brandPrimary },
 })
+

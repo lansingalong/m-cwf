@@ -23,6 +23,7 @@ import HamburgerSvg from '../../assets/icon-hamburger.svg'
 import PageSvg from '../../assets/icon-page.svg'
 import BackChevronSvg from '../../assets/icon-back-chevron.svg'
 import HelpSvg from '../../assets/icon-help.svg'
+import SettingsSvg from '../../assets/icon-settings.svg'
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'AssessmentDetail'>
@@ -508,8 +509,54 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
       return next
     })
   }
+  // Reverse map: assessmentId → display name (matches gc-cwf-activity script names)
+  const assessmentIdToName: Record<string, string> = {
+    hra:             'Health Risk Assessment',
+    comprehensive:   'Comprehensive Assessment',
+    functional:      'Functional Status Assessment',
+    sdoh:            'Social Determinants of Health (SDOH) Assessment',
+    pediatric_hra:   'Pediatric HRA',
+    oncology_hra:    'Oncology HRA',
+    fall:            'Fall Risk Assessment',
+    fall_prevention: 'Fall Risk Prevention',
+    toc_pre:         'Transitions of Care (TOC) 1 Pre-Discharge',
+    toc_home:        'Transitions of Care (TOC) 3 Home Visit',
+  }
+
+  const markAssessmentCompleted = (id: string) => {
+    try {
+      const ls = (window as any).localStorage
+      if (!ls) return
+      const all = JSON.parse(ls.getItem('wf_member_checklist') || '[]')
+      const now = new Date()
+      const p = (n: number) => String(n).padStart(2, '0')
+      const completedAt = `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`
+      const name = assessmentIdToName[id]
+      const updated = all.map((item: any) =>
+        item.memberKey === 'jackson-thomas' && item.assessment === name
+          ? { ...item, status: 'Completed', completedAt }
+          : item
+      )
+      ls.setItem('wf_member_checklist', JSON.stringify(updated))
+    } catch {}
+  }
+
   const [menuVisible, setMenuVisible] = useState(false)
   const [sideMenuVisible, setSideMenuVisible] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
+
+  const handleDemoFill = () => {
+    const filled = mockCompletedAnswers[assessmentId]
+    if (filled) setAnswers({ ...filled })
+    setDemoOpen(false)
+  }
+
+  const handleDemoClear = () => {
+    setAnswers({})
+    setProgress(assessmentId, 0)
+    setCurrentPage(0)
+    setDemoOpen(false)
+  }
   const [currentPage, setCurrentPageState] = useState(() => savedPages[assessmentId] ?? 0)
   const setCurrentPage = (page: number) => {
     setCurrentPageState(page)
@@ -625,6 +672,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
       return
     }
     setSubmitError('')
+    markAssessmentCompleted(assessment.id)
     navigation.replace('AssessmentList', { completedAssessmentId: assessment.id })
   }
 
@@ -908,6 +956,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                 style={[styles.finishNextBtn, !allAnswered && styles.finishNextBtnDisabled]}
                 onPress={allAnswered ? () => {
                   setFinishMode(null)
+                  markAssessmentCompleted(assessment.id)
                   navigation.replace('AssessmentList', { completedAssessmentId: assessment.id })
                 } : undefined}
                 activeOpacity={allAnswered ? 0.85 : 1}
@@ -956,9 +1005,42 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
           })()}
         </ScrollView>
       )}
+      {/* Demo circle button */}
+      {!readOnly && (
+        <View style={dm.wrap}>
+          {demoOpen && (
+            <>
+              <TouchableOpacity style={dm.backdrop} onPress={() => setDemoOpen(false)} activeOpacity={1} />
+              <View style={dm.menu}>
+                <TouchableOpacity style={dm.item} onPress={handleDemoFill} activeOpacity={0.8}>
+                  <Text style={dm.itemText}>Fill All</Text>
+                </TouchableOpacity>
+                <View style={dm.divider} />
+                <TouchableOpacity style={dm.item} onPress={handleDemoClear} activeOpacity={0.8}>
+                  <Text style={[dm.itemText, dm.itemClear]}>Clear All</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+          <TouchableOpacity style={dm.circle} onPress={() => setDemoOpen(o => !o)} activeOpacity={0.85}>
+            <SettingsSvg width={22} height={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   )
 }
+
+const dm = StyleSheet.create({
+  wrap:       { position: 'absolute', bottom: 32, right: 16, alignItems: 'flex-end', zIndex: 100 },
+  backdrop:   { position: 'fixed' as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 98 },
+  circle:     { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1A2E', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  menu:       { backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, minWidth: 140, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 10, overflow: 'hidden', zIndex: 99 },
+  item:       { paddingVertical: 14, paddingHorizontal: 20 },
+  itemText:   { fontSize: 15, fontWeight: '500', color: '#282F35' },
+  itemClear:  { color: '#CC3333' },
+  divider:    { height: 1, backgroundColor: '#EEF0F2' },
+})
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.bgPrimary },
