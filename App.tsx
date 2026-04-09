@@ -15,12 +15,12 @@ import { AssessmentProgressProvider } from './src/context/AssessmentProgress'
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'Merriweather-Regular': Merriweather_400Regular,
     'Merriweather-Light': Merriweather_300Light,
   })
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError) {
     return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator /></View>
   }
 
