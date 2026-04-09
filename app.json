@@ -29,7 +29,7 @@
       "bundler": "metro"
     },
     "experiments": {
-      "baseUrl": ""
+      "baseUrl": "/member-cwfassessments"
     },
     "plugins": [
       "expo-font"
