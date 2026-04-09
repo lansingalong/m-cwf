@@ -523,6 +523,35 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     toc_home:        'Transitions of Care (TOC) 3 Home Visit',
   }
 
+  const markAssessmentSaved = (id: string) => {
+    try {
+      const ls = (window as any).localStorage
+      if (!ls) return
+      const all = JSON.parse(ls.getItem('wf_member_checklist') || '[]')
+      const now = new Date()
+      const p = (n: number) => String(n).padStart(2, '0')
+      const savedAt = `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`
+      const name = assessmentIdToName[id]
+      const existingIdx = all.findIndex((item: any) => item.memberKey === 'maria-rivera' && item.assessment === name)
+      let updated
+      if (existingIdx >= 0) {
+        updated = all.map((item: any, i: number) =>
+          i === existingIdx ? { ...item, status: 'In Progress', savedAt } : item
+        )
+      } else {
+        updated = [...all, {
+          memberKey: 'maria-rivera',
+          assessment: name,
+          addedBy: 'Beatrice Kanya',
+          date: `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()}`,
+          status: 'In Progress',
+          savedAt,
+        }]
+      }
+      ls.setItem('wf_member_checklist', JSON.stringify(updated))
+    } catch {}
+  }
+
   const markAssessmentCompleted = (id: string) => {
     try {
       const ls = (window as any).localStorage
@@ -894,7 +923,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
                     <Text style={styles.menuItemText}>Submit</Text>
                   </TouchableOpacity>
                   <View style={styles.menuDivider} />
-                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setTimeout(() => navigation.goBack(), 100) }} activeOpacity={0.7}>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); markAssessmentSaved(assessment.id); setTimeout(() => navigation.goBack(), 100) }} activeOpacity={0.7}>
                     <Text style={styles.menuItemText}>Save and Close</Text>
                   </TouchableOpacity>
                 </View>
