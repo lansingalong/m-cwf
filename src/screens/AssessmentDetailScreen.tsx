@@ -523,6 +523,47 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
     toc_home:        'Transitions of Care (TOC) 3 Home Visit',
   }
 
+  const buildPartialQA = (): Array<{q: string; option: string; sub: string; score: number}> => {
+    const qa: Array<{q: string; option: string; sub: string; score: number}> = []
+    const allQuestions = pages.flatMap(p => p.questions)
+    allQuestions.forEach(q => {
+      const answer = answers[q.id]
+      if (answer === undefined || answer === '' || (Array.isArray(answer) && answer.length === 0)) return
+      let option = ''
+      if (q.type === 'single_choice' || q.type === 'yes_no') {
+        const opt = q.options?.find(o => o.value === answer)
+        option = opt ? opt.label : String(answer)
+      } else if (q.type === 'multi_choice') {
+        const selected = Array.isArray(answer) ? answer : []
+        option = selected.map(v => q.options?.find(o => o.value === v)?.label ?? v).join(', ')
+      } else if (q.type === 'scale') {
+        option = String(answer)
+      } else {
+        option = String(answer)
+      }
+      if (option) qa.push({ q: q.text, option, sub: '', score: 0 })
+      // Sub-questions triggered by this answer
+      if (q.subQuestions && typeof answer === 'string' && q.subQuestions.triggerValues.includes(answer)) {
+        q.subQuestions.questions.forEach(sq => {
+          const sqAnswer = answers[sq.id]
+          if (sqAnswer === undefined || sqAnswer === '') return
+          let sqOption = ''
+          if (sq.type === 'single_choice' || sq.type === 'yes_no') {
+            const opt = sq.options?.find(o => o.value === sqAnswer)
+            sqOption = opt ? opt.label : String(sqAnswer)
+          } else if (sq.type === 'multi_choice') {
+            const selected = Array.isArray(sqAnswer) ? sqAnswer : []
+            sqOption = selected.map(v => sq.options?.find(o => o.value === v)?.label ?? v).join(', ')
+          } else {
+            sqOption = String(sqAnswer)
+          }
+          if (sqOption) qa.push({ q: sq.text, option: sqOption, sub: '', score: 0 })
+        })
+      }
+    })
+    return qa
+  }
+
   const markAssessmentSaved = (id: string) => {
     try {
       const ls = (window as any).localStorage
@@ -532,7 +573,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
       const p = (n: number) => String(n).padStart(2, '0')
       const savedAt = `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`
       const name = assessmentIdToName[id]
-      const existingIdx = all.findIndex((item: any) => item.memberKey === 'maria-rivera' && item.assessment === name)
+      const existingIdx = all.findIndex((item: any) => item.memberKey === 'jackson-thomas' && item.assessment === name)
       let updated
       if (existingIdx >= 0) {
         updated = all.map((item: any, i: number) =>
@@ -540,7 +581,7 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
         )
       } else {
         updated = [...all, {
-          memberKey: 'maria-rivera',
+          memberKey: 'jackson-thomas',
           assessment: name,
           addedBy: 'Beatrice Kanya',
           date: `${p(now.getMonth()+1)}/${p(now.getDate())}/${now.getFullYear()}`,
@@ -549,6 +590,13 @@ export function AssessmentDetailScreen({ navigation, route }: Props) {
         }]
       }
       ls.setItem('wf_member_checklist', JSON.stringify(updated))
+      // Store partial answers so gc-cwf-activity can show them in the script response modal
+      const partialQA = buildPartialQA()
+      ls.setItem('assessment-partial-qa-jackson-thomas', JSON.stringify({
+        assessmentType: name,
+        memberKey: 'jackson-thomas',
+        qa: partialQA,
+      }))
     } catch {}
   }
 
